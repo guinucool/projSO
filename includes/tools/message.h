@@ -16,7 +16,7 @@ Message createMessage(pid_t pid, char type, char msg[], long time);
 void destroyMessage(Message msg);
 
 /* Senders and listeners */
-int messageListen();
+int messageListen(int listener);
 int messageSend(Message msg);
 
 #endif

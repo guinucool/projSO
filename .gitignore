@@ -1,3 +1,8 @@
 # Ficheiros executáveis
 monitor
 tracer
+
+# Directorias
+bin/*
+obj/*
+tmp/*

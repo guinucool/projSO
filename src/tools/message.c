@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "../../includes/tools/message.h"
+#include "../../includes/utils.h"
 
 /**
  * @struct __MESSAGE__
@@ -40,13 +41,17 @@ Message createMessage(pid_t pid, char type, char msg[], long time)
     /* Criação e alocação do espaço necessário */
     Message new = malloc(sizeof(NPMessage));
 
-    /* Associação das propriedades à mensagem */
-    new->pid = pid;
-    new->type = type;
-    new->time = time;
+    /* Verifica se o malloc foi bem sucedido */
+    if (new)
+    {
+        /* Associação das propriedades à mensagem */
+        new->pid = pid;
+        new->type = type;
+        new->time = time;
 
-    /* Cópia do texto para o conteúdo da mensagem */
-    strncpy(new->msg, msg, MSG_SIZE);
+        /* Cópia do texto para o conteúdo da mensagem */
+        strncpy(new->msg, msg, MSG_SIZE);
+    }
 
     /* Devolve o resultado da criação */
     return new;
@@ -68,74 +73,55 @@ void destroyMessage(Message msg)
 }
 
 /**
- * @brief 
+ * A função messageListen abre a leitura do descritor de leitura do fifo e destribui as mensagens
+ * que recebe de acordo com as suas necessidades e informações. 
  * 
- * @return int 
+ * @param listener O descritor de leitura de onde o servidor irá ler as mensagens.
+ * 
+ * @return O resultado da operação (sucesso ou erro).
  * 
  * @author Guilherme Oliveira
  * @date 16/04/2023
 */
-int messageListen()
+int messageListen(int listener)
 {
-    /* Criação do fifo de comunicação entre servidor e cliente */
-    int create = mkfifo("/tmp/serverListen", 0666);
-
-    /* Verificação de criação do fifo */
-    if (create < 0)
-        return -1;
-
     /* Variáveis auxiliares de leitura */
-    Message buffer = malloc(sizeof(NPMessage));
-    int bytes_read;
+    Message buffer = malloc(sizeof(NPMessage)); //!< Buffer de leitura de uma mensagem
+    ssize_t bytes_read;                         //!< Número de bytes lidos pelo listener
 
     /* Verificação da alocação de memória */
     if (buffer == NULL)
         return -1;
 
     /* Pronto para ouvir sempre que for necessário receber uma mensagem */
-    while (1)
+    while ((bytes_read = read(listener, buffer, sizeof(NPMessage))) > 0)
     {
-        /* Abertura do fifo para leitura */
-        int listener = open("/tmp/serverListen", O_RDONLY);
-
-        /* Verificação de abertura do fifo */
-        if (listener < 0)
-            return -1;
-
-        /* Lê o fifo assim que houver conteúdo para ler */
-        bytes_read = read(listener, buffer, sizeof(NPMessage));
-
-        /* Verifica se a leitura foi bem sucessida */
-        if (bytes_read < 0)
-            return -1;
-
         /* Imprime informação de debug */
         printf("Message received from PID %d of type %c at %ld ms with the content %s\n",
                 buffer->pid,
                 buffer->type,
                 buffer->time,
                 buffer->msg);
-
-        /* Fecha o fifo de leitura */
-        close(listener);
     }
 
     /* Destruição da variável de buffer de mensagens */
     destroyMessage(buffer);
 
-    /* Apaga o fifo criado */
-    unlink("/tmp/serverListen");
+    /* Verifica se as leituras foram bem sucessidas */
+    if (bytes_read < 0)
+        return -1;
 
     /* Termina em sucesso */
     return 0;
 }
 
 /**
- * @brief
+ * A função messageSend envia uma mensagem ao servidor criando um descritor de escrita
+ * para o fifo e escrevendo através dele a informação necessária à mensagem.
  * 
- * @param msg 
+ * @param msg A mensagem que se pretende enviar.
  * 
- * @return int 
+ * @return O resultado da operação de envio (sucesso ou erro).
  * 
  * @author Guilherme Oliveira
  * @date 17/04/2023
@@ -143,21 +129,21 @@ int messageListen()
 int messageSend(Message msg)
 {
     /* Abertura do fifo para escrita */
-    int sender = open("/tmp/serverListen", O_WRONLY);
+    int sender = open(FIFO_PATH, O_WRONLY);
 
     /* Verificação de abertura do fifo */
     if (sender < 0)
         return -1;
 
     /* Escrita da mensagem no fifo */
-    int bytes_written = write(sender, msg, sizeof(NPMessage));
+    ssize_t bytes_written = write(sender, msg, sizeof(NPMessage));
+
+    /* Fecha o fifo de escrita */
+    close(sender);
 
     /* Verificação da escrita no fifo */
     if (bytes_written < 0)
         return -1;
-
-    /* Fecha o fifo de escrita */
-    close(sender);
 
     /* Termina em sucesso */
     return 0;
