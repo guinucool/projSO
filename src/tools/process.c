@@ -60,6 +60,7 @@ int executeProcess(char cmd[])
 
         /* Executa e verifica a execução do programa */
         int res = execvp(exec[0], exec);
+        destroyCharArr(exec);
         errorChildHandler(res, CLIENT_NAME);
 
         /* Retorna o resultado do programa */
@@ -90,6 +91,9 @@ int executeProcess(char cmd[])
 
     /* Notificação do final do processo ao servidor */
     int notify = messageSend(cpid, TYPE_PROCESS_END, exec[0], end, FIFO_PATH);
+
+    /* Destroí o array auxiliar de argumentos */
+    destroyCharArr(exec);
     
     /* Verificação do sucesso da notificação */
     if (notify < 0)

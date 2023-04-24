@@ -13,6 +13,7 @@ long getTimeMilliseconds();
 void errorHandler(int err, char prog[]);
 void argHandler(int err, int arg, char prog[]);
 void errorChildHandler(int err, char prog[]);
+void destroyCharArr(char ** arr);
 char ** getArgv(char cmd[]);
 
 #endif
