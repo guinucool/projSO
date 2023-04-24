@@ -97,7 +97,7 @@ int messageListen(int listener)
     while ((bytes_read = read(listener, buffer, sizeof(NPMessage))) > 0)
     {
         /* Imprime informação de debug */
-        printf("Message received from PID %d of type %c at %ld ms with the content %s\n",
+        printf("Message received from PID %d of type %c generated at %ld ms with the content %s\n",
                 buffer->pid,
                 buffer->type,
                 buffer->time,
@@ -116,20 +116,21 @@ int messageListen(int listener)
 }
 
 /**
- * A função messageSend envia uma mensagem ao servidor criando um descritor de escrita
+ * A função messageWrite escreve uma mensagem num fifo criando um descritor de escrita
  * para o fifo e escrevendo através dele a informação necessária à mensagem.
  * 
  * @param msg A mensagem que se pretende enviar.
+ * @param fifo O fifo para o qual se pretende escrever a mensagem.
  * 
- * @return O resultado da operação de envio (sucesso ou erro).
+ * @return O resultado da operação de escrita (sucesso ou erro).
  * 
  * @author Guilherme Oliveira
  * @date 17/04/2023
 */
-int messageSend(Message msg)
+int messageWrite(Message msg, char fifo[])
 {
     /* Abertura do fifo para escrita */
-    int sender = open(FIFO_PATH, O_WRONLY);
+    int sender = open(fifo, O_WRONLY);
 
     /* Verificação de abertura do fifo */
     if (sender < 0)
@@ -146,5 +147,43 @@ int messageSend(Message msg)
         return -1;
 
     /* Termina em sucesso */
+    return 0;
+}
+
+/**
+ * A função messageSend envia uma mensagem para um fifo, criando a variável mensagem necessário
+ * ao envio e posteriormente escrevendo-a no fifo.
+ * 
+ * @param pid O PID da mensagem a enviar.
+ * @param type O tipo de mensagem a enviar.
+ * @param msg O conteúdo da mensagem a enviar.
+ * @param time O timestamp associado ao conteúdo da mensagem a enviar.
+ * @param fifo O fifo para onde enviar a mensagem.
+ * 
+ * @return O resultado da operação de envio (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 23/04/2023
+*/
+int messageSend(pid_t pid, char type, char content[], long time, char fifo[])
+{
+    /* Cria a mensagem que pretende enviar ao servidor */
+    Message msg = createMessage(pid, type, content, time);
+
+    /* Verifica o sucesso da criação da mensagem a enviar ao servidor */
+    if (msg == NULL)
+        return -1;
+
+    /* Envio da mensagem para o servidor */
+    int res = messageWrite(msg, fifo);
+
+    /* Destroí a mensagem enviada */
+    destroyMessage(msg);
+
+    /* Verificação do sucesso do envio */
+    if (res < 0)
+        return -1;
+
+    /* Termina o processo de notificação em sucesso */
     return 0;
 }

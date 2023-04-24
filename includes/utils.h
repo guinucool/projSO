@@ -8,9 +8,11 @@
 #define SERVER_NAME "monitor"
 #define CLIENT_NAME "tracer"
 
-/* Methods */
+/* Functions */
 long getTimeMilliseconds();
 void errorHandler(int err, char prog[]);
 void argHandler(int err, int arg, char prog[]);
+void errorChildHandler(int err, char prog[]);
+char ** getArgv(char cmd[]);
 
 #endif

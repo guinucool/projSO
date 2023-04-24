@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include "../includes/tools/message.h"
+#include "../includes/tools/process.h"
 #include "../includes/utils.h"
 
 /**
@@ -23,7 +24,7 @@ int main(int argc, char * argv[])
         /* Caso a flag do execute seja a de um programa individual */
         if(strcmp(argv[2], "-u") == 0)
         {
-            
+            executeProcess(argv[3]);
         }
 
         /* Caso a flag do execute seja desconhecida */
@@ -34,8 +35,7 @@ int main(int argc, char * argv[])
     /* Caso o modo de execução seja desconhecido */
     else
         argHandler(-1, 0, CLIENT_NAME);
-    
-    Message msg = createMessage(getpid(), TYPE_PROCESS, "cat", getTimeMilliseconds());
 
-    messageSend(msg);
+    /* Conclusão do programa em sucesso */
+    return 0;
 }

@@ -5,18 +5,15 @@
 #define MSG_SIZE 4096
 
 /* Message types */
-#define TYPE_PROCESS 'P'
+#define TYPE_PROCESS_START 'P'
+#define TYPE_PROCESS_END 'E'
 #define TYPE_STATUSREQUEST 'S'
 
 /* Struct */
 typedef struct __MESSAGE__ *Message;
 
-/* Functions */
-Message createMessage(pid_t pid, char type, char msg[], long time);
-void destroyMessage(Message msg);
-
 /* Senders and listeners */
 int messageListen(int listener);
-int messageSend(Message msg);
+int messageSend(pid_t pid, char type, char content[], long time, char fifo[]);
 
 #endif
