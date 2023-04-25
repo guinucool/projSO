@@ -330,16 +330,6 @@ int executeProcess(char cmd[])
     /* Descobre o timestamp no fim da execução do processo */
     long end = getTimeMilliseconds();
 
-    /* Verifica o estado de conclusão do processo */
-    if (WIFEXITED(status)) {
-
-        /* Verifica se algum processo dentro do filho falhou*/
-        if(WEXITSTATUS(status))
-            exit(1);
-    }
-    else
-        return -1;
-
     /* Imprime o tempo que o programa demorou */
     printf("Ended in %ld ms\n", (end - start));
 
@@ -354,6 +344,16 @@ int executeProcess(char cmd[])
     
     /* Verificação do sucesso da notificação */
     if (notify < 0)
+        return -1;
+
+    /* Verifica o estado de conclusão do processo */
+    if (WIFEXITED(status)) {
+
+        /* Verifica se algum processo dentro do filho falhou*/
+        if(WEXITSTATUS(status))
+            exit(1);
+    }
+    else
         return -1;
 
     /* Termina o processo em sucesso */
