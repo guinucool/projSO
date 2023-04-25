@@ -7,13 +7,22 @@
 /* Message types */
 #define TYPE_PROCESS_START 'P'
 #define TYPE_PROCESS_END 'E'
+
 #define TYPE_STATUSREQUEST 'S'
+#define TYPE_STATUSREPLY 'R'
+
+/* Default messages */
+#define MSG_CONTENT_EMPTY "empty"
 
 /* Struct */
 typedef struct __MESSAGE__ *Message;
 
 /* Senders and listeners */
-int messageListen(int listener);
+int messageListen(int listener, void (*printer)(Message));
 int messageSend(pid_t pid, char type, char content[], long time, char fifo[]);
+
+/* Printers */
+void printDebugMessage(Message msg);
+void printStatusMessage(Message msg);
 
 #endif

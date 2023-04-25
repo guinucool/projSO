@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "../../includes/tools/message.h"
+#include "../../includes/tools/process.h"
 #include "../../includes/utils.h"
 
 /**
@@ -83,7 +84,7 @@ void destroyMessage(Message msg)
  * @author Guilherme Oliveira
  * @date 16/04/2023
 */
-int messageListen(int listener)
+int messageListen(int listener, void (*printer)(Message))
 {
     /* Variáveis auxiliares de leitura */
     Message buffer = malloc(sizeof(NPMessage)); //!< Buffer de leitura de uma mensagem
@@ -96,12 +97,20 @@ int messageListen(int listener)
     /* Pronto para ouvir sempre que for necessário receber uma mensagem */
     while ((bytes_read = read(listener, buffer, sizeof(NPMessage))) > 0)
     {
-        /* Imprime informação de debug */
-        printf("Message received from PID %d of type %c generated at %ld ms with the content %s\n",
-                buffer->pid,
-                buffer->type,
-                buffer->time,
-                buffer->msg);
+        /* Imprime informação da mensagem */
+        printer(buffer);
+
+        /* Executa o processo de adição do processo à fila, caso seja o caso */
+        if (buffer->type == TYPE_PROCESS_START)
+            addProcessQueue(buffer->pid, buffer->msg, buffer->time);
+
+        /* Executa o término do processo na fila, caso seja o caso */
+        if (buffer->type == TYPE_PROCESS_END)
+            mapProcessQueue(buffer->pid, 0);
+
+        /* Executa um pedido status da fila de processos, caso seja o caso */
+        if (buffer->type == TYPE_STATUSREQUEST)
+            mapProcessQueue(buffer->pid, 1);
     }
 
     /* Destruição da variável de buffer de mensagens */
@@ -186,4 +195,36 @@ int messageSend(pid_t pid, char type, char content[], long time, char fifo[])
 
     /* Termina o processo de notificação em sucesso */
     return 0;
+}
+
+/**
+ * A função printDebugMessage imprime uma mensagem para o stdout em formato de debug.
+ * 
+ * @param msg A mensagem a se imprimir.
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+void printDebugMessage(Message msg)
+{
+    /* Imprime o output que se pretende */
+    printf("Message received from PID %d of type %c generated at %ld ms with the content %s\n",
+            msg->pid,
+            msg->type,
+            msg->time,
+            msg->msg);
+}
+
+/**
+ * A função printStatusMessage imprime uma mensagem para o stdout em formato de status.
+ * 
+ * @param msg A mensagem a se imprimir.
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+void printStatusMessage(Message msg)
+{
+    /* Imprime o output que se pretende */
+    printf("%d %s %ld ms\n", msg->pid, msg->msg, msg->time);
 }

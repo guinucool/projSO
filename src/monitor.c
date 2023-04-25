@@ -32,7 +32,7 @@ int main()
     errorHandler(blocker, SERVER_NAME);
     
     /* Leitura das mensagens recebidas dos clientes */
-    int res = messageListen(listener);
+    int res = messageListen(listener, printDebugMessage);
 
     /* Fecho dos escritores e do fifo */
     close(listener);

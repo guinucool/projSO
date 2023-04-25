@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include "../../includes/tools/message.h"
 #include "../../includes/tools/process.h"
 #include "../../includes/utils.h"
@@ -18,9 +20,239 @@
 typedef struct __PROCESS__ {
     pid_t pid;
     char exec[EXEC_MAX];
-    long time;
+    long start;
     char finished;
 }*Process, NPProcess;
+
+/**
+ * A função createProcess cria e aloca o espaço necessário a uma variável do tipo Process.
+ * 
+ * @param pid O pid associado ao processo que a variável descreve.
+ * @param exec O que o processo está a executar.
+ * @param start O timestamp de início do processo.
+ * 
+ * @return O processo criado e alocado.
+ * 
+ * @author Guilherme Oliveira
+ * @date 24/04/2023
+*/
+Process createProcess(pid_t pid, char exec[], long start)
+{
+    /* Criação e alocação do espaço necessário a uma variável de processo */
+    Process new = malloc(sizeof(NPProcess));
+
+    /* Verifica se a alocação de espaço foi bem sucedida */
+    if (new)
+    {
+        /* Definição das propriedades de um processo */
+        new->pid = pid;
+        new->start = start;
+        new->finished = 0;
+
+        /* Cópia dos nomes dos programas em execução no processo */
+        strncpy(new->exec, exec, EXEC_MAX);
+    }
+
+    /* Devolve a nova variável de processo criada */
+    return new;
+}
+
+/**
+ * A função destroyProcess destroí uma variável do tipo Process, libertando o espaço usado por esta.
+ * 
+ * @param process A variável a ser destruída.
+ * 
+ * @author Guilherme Oliveira
+ * @date 24/04/2023
+*/
+void destroyProcess(Process process)
+{
+    /* Verifica se a variável que deve ser libertada existe */
+    if (process)
+        free(process);
+}
+
+/**
+ * A função enqueueProcess adiciona um processo à fila de processos.
+ * 
+ * @param process O processo a ser colocado na fila.
+ * @param queue A fila onde o processo deve ser inserido.
+ * 
+ * @return O resultado da operação (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 24/04/2023
+*/
+int enqueueProcess(Process process, int queue)
+{
+    /* Escreve o processo na fila de processos */
+    ssize_t bytes_written = write(queue, process, sizeof(NPProcess));
+
+    /* Verificação da escrita do processo na fila */
+    if (bytes_written < 0)
+        return -1;
+
+    /* Termina o processo em sucesso */
+    return 0;
+}
+
+/**
+ * A função dequeueProcess substitui um processo ativo por um processo terminado na fila.
+ * 
+ * @param process O processo a ser substituido.
+ * @param queue A fila onde vai ser substituido.
+ * 
+ * @return O resultado da operação (sucesso ou insucesso).
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+int dequeueProcess(Process process, int queue)
+{
+    /* Termina o processo em questão */
+    process->finished = 1;
+
+    /* Coloca a posição de escrita de volta no início da antiga posição do processo em execução */
+    int offset = lseek(queue, -sizeof(NPProcess), SEEK_CUR);
+
+    /* Verifica a colocação */
+    if (offset < 0)
+        return -1;
+
+    /* Coloca o processo terminado "de volta" na fila */
+    int res = enqueueProcess(process, queue);
+
+    /* Verifica a colocação do processo */
+    if (res < 0)
+        return -1;
+
+    /* Termina o processo em sucesso */
+    return 0;
+}
+
+/**
+ * A função addProcessQueue cria e adiciona um processo ativo ao final fila de espera.
+ * 
+ * @param pid O pid do processo a ser adicionado.
+ * @param exec O programa executado no processo.
+ * @param start O timestamp de início do processo.
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+void addProcessQueue(pid_t pid, char exec[], long start)
+{
+    /* Cria o processo-filho que irá adicionar um processo à fila */
+    if (fork() == 0)
+    {
+        /* Cria o processo que vai adicionar à fila */
+        Process process = createProcess(pid, exec, start);
+
+        /* Verifica se a criação de processo foi bem sucedida */
+        if (process == NULL)
+            errorChildHandler(-1, SERVER_NAME);
+
+        /* Abre o descritor de escrita da fila de processos em execução */
+        int queue = open(QUEUE_PATH, O_APPEND | O_CREAT | O_WRONLY, 0640);
+
+        /* Coloca o processo na fila */
+        int res = enqueueProcess(process, queue);
+
+        /* Destroí a variável auxiliar e fecha o descritor */
+        destroyProcess(process);
+        close(queue);
+
+        /* Verifica a colocação */
+        errorChildHandler(res, SERVER_NAME);
+
+        /* Termina o filho em sucesso */
+        _exit(0);
+    }
+}
+
+/**
+ * A função mapProcessQueue mapeia a fila de processo e, consoante o modo que foi definido, ou
+ * mapeia até encontrar o processo que deseja terminar ou mapeia a fila enviando os vários processos
+ * de volta para o cliente.
+ * 
+ * @param pid O id do processo que se pretende terminar ou o id do processo com o qual se pretende comunicar.
+ * @param mode O modo de execução do map.
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+void mapProcessQueue(pid_t pid, char mode)
+{
+    /* Cria o processo-filho que irá mapear a fila e proceder à alterações pretendida */
+    if (fork() == 0)
+    {
+        /* Variável que irá armazenar o modo de abertura do descritor da fila */
+        int fmode = O_CREAT;
+
+        /* Decide qual o modo do map (percorrer a lista ou tirar algum processo da lista)*/
+        if (mode) fmode |= O_RDONLY;
+        else fmode |= O_RDWR;
+
+        /* Abre o descritor da fila */
+        int queue = open(QUEUE_PATH, fmode, 0640);
+
+        /* Variáveis auxiliar que armazenam o bytes lidos */
+        Process process = malloc(sizeof(NPProcess));
+        ssize_t bytes_read;
+
+        /* Verifica se a variável de processo foi criado com sucesso */
+        if (process == NULL)
+            errorChildHandler(-1, SERVER_NAME);
+
+        /* Começa a fazer o mapeamento da fila */
+        while ((bytes_read = read(queue, process, sizeof(NPProcess))) > 0)
+        {
+            /* Caso seja o modo de enviar o status ao cliente */
+            if (mode)
+            {
+                /* Confirma se o processo encontrado está em execução */
+                if (!(process->finished))
+                {
+                    /* Variável que irá armazenar o path do fifo de comunicação com o cliente */
+                    char path[PATH_SIZE];
+                    snprintf(path, PATH_SIZE, "tmp/%d", pid);
+
+                    /* Calcula a duração do processo até ao momento */
+                    long duration = getTimeMilliseconds() - process->start;
+
+                    /* Envia e verifica o envio da mensagem de volta ao cliente */
+                    int res = messageSend(process->pid, TYPE_STATUSREPLY, process->exec, duration, path);
+                    errorChildHandler(res, SERVER_NAME);
+                }
+            }
+
+            /* Caso o modo da função seja o de remover um processo */
+            else
+            {
+                /* Confirma se o processo é o que se querer terminar */
+                if (process->pid == pid)
+                {
+                    /* Remove um processo da fila e verifica essa remoção */
+                    int dequeue = dequeueProcess(process, queue);
+                    errorChildHandler(dequeue, SERVER_NAME);
+
+                    /* Termina a procura */
+                    break;
+                }
+            }
+        }
+
+        /* Fecha o descritor da fila e apaga a variável auxiliar */
+        destroyProcess(process);
+        close(queue);
+
+        /* Verifica se o processo de leitura não falhou */
+        errorChildHandler(bytes_read, SERVER_NAME);
+        
+        /* Termina o processo em sucesso */
+        _exit(0);
+    }
+}
 
 /**
  * A função executeProcess executa um processo, enviando a informação necessária ao servidor, assim como,
@@ -100,5 +332,59 @@ int executeProcess(char cmd[])
         return -1;
 
     /* Termina o processo em sucesso */
+    return 0;
+}
+
+/**
+ * A função processStatusRequest executa para o servidor um pedido de status da fila de processos e prepara
+ * um processo que irá ouvir e imprimir os resultados vindos do servidor.
+ * 
+ * @return O resultado da operação (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+int processStatusResquest()
+{
+    /* Descobre o pid do processo em execução neste momento */
+    pid_t pid = getpid();
+
+    /* Cria o caminho para o fifo que irá criar para comunicar com o servidor */
+    char path[PATH_SIZE];
+    snprintf(path, PATH_SIZE, "tmp/%d", pid);
+
+    /* Cira o fifo de comunicação com o servidor */
+    int create = mkfifo(path, 0666);
+
+    /* Verificação se a criação foi bem sucedida */
+    if (create < 0)
+        return -1;
+
+    /* Envia mensagem de pedido para o servidor */
+    int send = messageSend(pid, TYPE_STATUSREQUEST, MSG_CONTENT_EMPTY, getTimeMilliseconds(), FIFO_PATH);
+
+    /* Verificação do envio da mensagem */
+    if (send < 0)
+        return -1;
+
+    /* Cria o descritor de leitura do fifo */
+    int listener = open(path, O_RDONLY);
+
+    /* Verificação da abertura do descritor */
+    if (listener < 0)
+        return -1;
+
+    /* Leitura das mensagens recebidas do servidor */
+    int res = messageListen(listener, printStatusMessage);
+
+    /* Fecha o descritor e o fifo */
+    close(listener);
+    unlink(path);
+
+    /* Verificação do resultado da leitura das mensagens do servidor */
+    if (res < 0)
+        return -1;
+
+    /* Termino do processo em sucesso */
     return 0;
 }

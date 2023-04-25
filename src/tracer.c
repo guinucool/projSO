@@ -24,12 +24,20 @@ int main(int argc, char * argv[])
         /* Caso a flag do execute seja a de um programa individual */
         if(strcmp(argv[2], "-u") == 0)
         {
-            executeProcess(argv[3]);
+            int res = executeProcess(argv[3]);
+            errorHandler(res, CLIENT_NAME);
         }
 
         /* Caso a flag do execute seja desconhecida */
         else
             argHandler(-1, 0, CLIENT_NAME);
+    }
+
+    /* Caso o modo de execução seja status */
+    else if (strcmp(argv[1], "status") == 0)
+    {
+        int res = processStatusResquest();
+        errorHandler(res, CLIENT_NAME);
     }
 
     /* Caso o modo de execução seja desconhecido */
