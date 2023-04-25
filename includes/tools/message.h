@@ -19,7 +19,7 @@ typedef struct __MESSAGE__ *Message;
 
 /* Senders and listeners */
 int messageListen(int listener, void (*printer)(Message));
-int messageSend(pid_t pid, char type, char content[], long time, char fifo[]);
+int messageSend(pid_t pid, char type, char content[], long time, int fifo);
 
 /* Printers */
 void printDebugMessage(Message msg);

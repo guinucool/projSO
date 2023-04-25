@@ -125,8 +125,7 @@ int messageListen(int listener, void (*printer)(Message))
 }
 
 /**
- * A função messageWrite escreve uma mensagem num fifo criando um descritor de escrita
- * para o fifo e escrevendo através dele a informação necessária à mensagem.
+ * A função messageWrite escreve uma mensagem num fifo escrevendo nele a informação necessária à mensagem.
  * 
  * @param msg A mensagem que se pretende enviar.
  * @param fifo O fifo para o qual se pretende escrever a mensagem.
@@ -136,20 +135,10 @@ int messageListen(int listener, void (*printer)(Message))
  * @author Guilherme Oliveira
  * @date 17/04/2023
 */
-int messageWrite(Message msg, char fifo[])
+int messageWrite(Message msg, int fifo)
 {
-    /* Abertura do fifo para escrita */
-    int sender = open(fifo, O_WRONLY);
-
-    /* Verificação de abertura do fifo */
-    if (sender < 0)
-        return -1;
-
     /* Escrita da mensagem no fifo */
-    ssize_t bytes_written = write(sender, msg, sizeof(NPMessage));
-
-    /* Fecha o fifo de escrita */
-    close(sender);
+    ssize_t bytes_written = write(fifo, msg, sizeof(NPMessage));
 
     /* Verificação da escrita no fifo */
     if (bytes_written < 0)
@@ -174,7 +163,7 @@ int messageWrite(Message msg, char fifo[])
  * @author Guilherme Oliveira
  * @date 23/04/2023
 */
-int messageSend(pid_t pid, char type, char content[], long time, char fifo[])
+int messageSend(pid_t pid, char type, char content[], long time, int fifo)
 {
     /* Cria a mensagem que pretende enviar ao servidor */
     Message msg = createMessage(pid, type, content, time);

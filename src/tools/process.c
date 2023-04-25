@@ -204,6 +204,21 @@ void mapProcessQueue(pid_t pid, char mode)
         if (process == NULL)
             errorChildHandler(-1, SERVER_NAME);
 
+        /* Variável que poderá armazenar o potencial escritor do fifo de status */
+        int statusfifo;
+
+        /* Caso esteja em modo de enviar o status */
+        if (mode)
+        {
+            /* Variável que irá armazenar o path do fifo de comunicação com o cliente */
+            char path[PATH_SIZE];
+            snprintf(path, PATH_SIZE, "tmp/%d", pid);
+
+            /* Abertura e verificação da abertura do fifo de escrita */
+            statusfifo = open(path, O_WRONLY);
+            errorChildHandler(statusfifo, SERVER_NAME);
+        }
+
         /* Começa a fazer o mapeamento da fila */
         while ((bytes_read = read(queue, process, sizeof(NPProcess))) > 0)
         {
@@ -213,15 +228,11 @@ void mapProcessQueue(pid_t pid, char mode)
                 /* Confirma se o processo encontrado está em execução */
                 if (!(process->finished))
                 {
-                    /* Variável que irá armazenar o path do fifo de comunicação com o cliente */
-                    char path[PATH_SIZE];
-                    snprintf(path, PATH_SIZE, "tmp/%d", pid);
-
                     /* Calcula a duração do processo até ao momento */
                     long duration = getTimeMilliseconds() - process->start;
 
                     /* Envia e verifica o envio da mensagem de volta ao cliente */
-                    int res = messageSend(process->pid, TYPE_STATUSREPLY, process->exec, duration, path);
+                    int res = messageSend(process->pid, TYPE_STATUSREPLY, process->exec, duration, statusfifo);
                     errorChildHandler(res, SERVER_NAME);
                 }
             }
@@ -241,6 +252,9 @@ void mapProcessQueue(pid_t pid, char mode)
                 }
             }
         }
+
+        /* Fecha o descritor do fifo de status */
+        if (mode) close(statusfifo);
 
         /* Fecha o descritor da fila e apaga a variável auxiliar */
         destroyProcess(process);
@@ -267,6 +281,13 @@ void mapProcessQueue(pid_t pid, char mode)
 */
 int executeProcess(char cmd[])
 {
+    /* Abertura do fifo para escrita */
+    int sender = open(FIFO_PATH, O_WRONLY);
+
+    /* Verificação de abertura do fifo */
+    if (sender < 0)
+        return -1;
+
     /* Variável que irá armazenar os argumentos do programa */
     char ** exec = getArgv(cmd);
 
@@ -283,8 +304,9 @@ int executeProcess(char cmd[])
         /* Descobre o pid do processo-filho */
         pid_t pid = getpid();
 
-        /* Notificação de um processo ao servidor e verificação do sucesso da notificação */
-        int notify = messageSend(pid, TYPE_PROCESS_START, exec[0], start, FIFO_PATH);
+        /* Notificação de um processo ao servidor e verificação do sucesso da notificação, tal como fecho do descritor de leitura (dentro do filho) */
+        int notify = messageSend(pid, TYPE_PROCESS_START, exec[0], start, sender);
+        close(sender);
         errorChildHandler(notify, CLIENT_NAME);
 
         /* Imprime notificação do programa a correr */
@@ -322,7 +344,10 @@ int executeProcess(char cmd[])
     printf("Ended in %ld ms\n", (end - start));
 
     /* Notificação do final do processo ao servidor */
-    int notify = messageSend(cpid, TYPE_PROCESS_END, exec[0], end, FIFO_PATH);
+    int notify = messageSend(cpid, TYPE_PROCESS_END, exec[0], end, sender);
+
+    /* Fecha o fifo de escrita */
+    close(sender);
 
     /* Destroí o array auxiliar de argumentos */
     destroyCharArr(exec);
@@ -360,8 +385,18 @@ int processStatusResquest()
     if (create < 0)
         return -1;
 
+    /* Abertura do fifo para escrita */
+    int sender = open(FIFO_PATH, O_WRONLY);
+
+    /* Verificação de abertura do fifo */
+    if (sender < 0)
+        return -1;
+
     /* Envia mensagem de pedido para o servidor */
-    int send = messageSend(pid, TYPE_STATUSREQUEST, MSG_CONTENT_EMPTY, getTimeMilliseconds(), FIFO_PATH);
+    int send = messageSend(pid, TYPE_STATUSREQUEST, MSG_CONTENT_EMPTY, getTimeMilliseconds(), sender);
+
+    /* Fecha o fifo de escrita */
+    close(sender);
 
     /* Verificação do envio da mensagem */
     if (send < 0)

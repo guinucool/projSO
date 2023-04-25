@@ -6,10 +6,17 @@
 #include "../includes/utils.h"
 
 /**
+ * A função main irá executar o cliente (tracer) e correrá os processos e envios necessários
+ * de acordo com as suas opções de execução.
  * 
+ * @param argc O número de argumentos com que o cliente foi executado.
+ * @param argv Os argumentos com que o cliente foi executado.
  * 
- * @return int 
- */
+ * @return O estado em que o programa foi concluído.
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
 int main(int argc, char * argv[])
 {
     /* Verificação do número de argumentos recebidos */
