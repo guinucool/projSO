@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include "../../includes/tools/message.h"
 #include "../../includes/tools/process.h"
+#include "../../includes/tools/dynarray.h"
 #include "../../includes/utils.h"
 
 /**
@@ -171,30 +172,73 @@ void addProcessQueue(pid_t pid, char exec[], long start)
 }
 
 /**
- * A função mapProcessQueue mapeia a fila de processo e, consoante o modo que foi definido, ou
- * mapeia até encontrar o processo que deseja terminar ou mapeia a fila enviando os vários processos
- * de volta para o cliente.
+ * A função removeProcessQueue desativa um processo que se encontra presente na fila de processos.
  * 
- * @param pid O id do processo que se pretende terminar ou o id do processo com o qual se pretende comunicar.
- * @param mode O modo de execução do map.
+ * @param pid O pid do processo a remover.
  * 
  * @author Guilherme Oliveira
- * @date 25/04/2023
+ * @date 26/04/2023
 */
-void mapProcessQueue(pid_t pid, char mode)
+void removeProcessQueue(pid_t pid)
+{
+    /* Cria um processo-filho que irá desativar o processo na fila */
+    if (fork() == 0)
+    {
+        /* Abertura e verificação da abertura do descritor da fila de espera */
+        int queue = open(QUEUE_PATH, O_CREAT | O_RDWR, 0640);
+        errorChildHandler(queue, SERVER_NAME);
+
+        /* Cria um buffer de processo e uma variável de número de leitura de bytes auxiliar */
+        Process process = malloc(sizeof(NPProcess));
+        ssize_t bytes_read;
+
+        /* Verificação do número de bytes lidos */
+        if (process == NULL)
+            errorChildHandler(-1, SERVER_NAME);
+
+        /* Lê a fila de espera até encontrar a posição em que o processo pretendido está */
+        while ((bytes_read = read(queue, process, sizeof(NPProcess))) > 0 && process->pid != pid);
+        
+        /* Caso o processo tenha sido encontrado, desativa-o e verifica e sucesso nessa operação */
+        if (bytes_read > 0)
+            errorChildHandler(dequeueProcess(process, queue), SERVER_NAME);
+
+        /* Destroí o processo e fecha a fila */
+        destroyProcess(process);
+        close(queue);
+
+        /* Verifica se houve algum erro na leitura */
+        errorChildHandler(bytes_read, SERVER_NAME);
+
+        /* Termina o processo em sucesso */
+        _exit(0);
+    }
+}
+
+/**
+ * A função mapProcessQueue mapeia a fila de processo enviando os vários processos ativos de volta para o cliente.
+ * 
+ * @param pid O pid do processo com o qual se pretende comunicar.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
+void mapProcessQueue(pid_t pid)
 {
     /* Cria o processo-filho que irá mapear a fila e proceder à alterações pretendida */
     if (fork() == 0)
     {
-        /* Variável que irá armazenar o modo de abertura do descritor da fila */
-        int fmode = O_CREAT;
+        /* Variável que irá armazenar o path do fifo de comunicação com o cliente */
+        char path[PATH_SIZE];
+        snprintf(path, PATH_SIZE, "tmp/%d", pid);
 
-        /* Decide qual o modo do map (percorrer a lista ou tirar algum processo da lista)*/
-        if (mode) fmode |= O_RDONLY;
-        else fmode |= O_RDWR;
+        /* Abre e verifica o descritor da fila */
+        int queue = open(QUEUE_PATH, O_CREAT | O_RDONLY, 0640);
+        errorChildHandler(queue, SERVER_NAME);
 
-        /* Abre o descritor da fila */
-        int queue = open(QUEUE_PATH, fmode, 0640);
+        /* Abertura e verificação da abertura do fifo de escrita */
+        int statusfifo = open(path, O_WRONLY);
+        errorChildHandler(statusfifo, SERVER_NAME);
 
         /* Variáveis auxiliar que armazenam o bytes lidos */
         Process process = malloc(sizeof(NPProcess));
@@ -204,57 +248,23 @@ void mapProcessQueue(pid_t pid, char mode)
         if (process == NULL)
             errorChildHandler(-1, SERVER_NAME);
 
-        /* Variável que poderá armazenar o potencial escritor do fifo de status */
-        int statusfifo;
-
-        /* Caso esteja em modo de enviar o status */
-        if (mode)
-        {
-            /* Variável que irá armazenar o path do fifo de comunicação com o cliente */
-            char path[PATH_SIZE];
-            snprintf(path, PATH_SIZE, "tmp/%d", pid);
-
-            /* Abertura e verificação da abertura do fifo de escrita */
-            statusfifo = open(path, O_WRONLY);
-            errorChildHandler(statusfifo, SERVER_NAME);
-        }
-
         /* Começa a fazer o mapeamento da fila */
         while ((bytes_read = read(queue, process, sizeof(NPProcess))) > 0)
         {
-            /* Caso seja o modo de enviar o status ao cliente */
-            if (mode)
+            /* Confirma se o processo encontrado está em execução */
+            if (!(process->finished))
             {
-                /* Confirma se o processo encontrado está em execução */
-                if (!(process->finished))
-                {
-                    /* Calcula a duração do processo até ao momento */
-                    long duration = getTimeMilliseconds() - process->start;
+                /* Calcula a duração do processo até ao momento */
+                long duration = getTimeMilliseconds() - process->start;
 
-                    /* Envia e verifica o envio da mensagem de volta ao cliente */
-                    int res = messageSend(process->pid, TYPE_STATUSREPLY, process->exec, duration, statusfifo);
-                    errorChildHandler(res, SERVER_NAME);
-                }
-            }
-
-            /* Caso o modo da função seja o de remover um processo */
-            else
-            {
-                /* Confirma se o processo é o que se querer terminar */
-                if (process->pid == pid)
-                {
-                    /* Remove um processo da fila e verifica essa remoção */
-                    int dequeue = dequeueProcess(process, queue);
-                    errorChildHandler(dequeue, SERVER_NAME);
-
-                    /* Termina a procura */
-                    break;
-                }
+                /* Envia e verifica o envio da mensagem de volta ao cliente */
+                int res = messageSend(process->pid, TYPE_STATUSREPLY, process->exec, duration, statusfifo);
+                errorChildHandler(res, SERVER_NAME);
             }
         }
 
         /* Fecha o descritor do fifo de status */
-        if (mode) close(statusfifo);
+        close(statusfifo);
 
         /* Fecha o descritor da fila e apaga a variável auxiliar */
         destroyProcess(process);
@@ -289,7 +299,7 @@ int executeProcess(char cmd[])
         return -1;
 
     /* Variável que irá armazenar os argumentos do programa */
-    char ** exec = getArgv(cmd);
+    char ** exec = stringToDArray(cmd, " ");
 
     /* Verificação do sucesso na criação do array que irá guardar os argumentos do array */
     if (exec == NULL)
@@ -314,7 +324,7 @@ int executeProcess(char cmd[])
 
         /* Executa e verifica a execução do programa */
         int res = execvp(exec[0], exec);
-        destroyCharArr(exec);
+        destroyDArray(exec);
         errorChildHandler(res, CLIENT_NAME);
 
         /* Retorna o resultado do programa */
@@ -340,7 +350,7 @@ int executeProcess(char cmd[])
     close(sender);
 
     /* Destroí o array auxiliar de argumentos */
-    destroyCharArr(exec);
+    destroyDArray(exec);
     
     /* Verificação do sucesso da notificação */
     if (notify < 0)

@@ -230,12 +230,33 @@ int registerProcess(pid_t pid, char exec[], long time, char path[])
     return 0;
 }
 
+/**
+ * A função getRegisterTime devolve o tempo de execução associado a um processo num registo.
+ * 
+ * @param reg O registo de onde se pretende obter o tempo de execução.
+ * 
+ * @return O tempo de execução do registo.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023 
+*/
 long getRegisterTime(Register reg)
 {
     /* Devolve o tempo de execução de um registo */
     return reg->time;
 }
 
+/**
+ * A função countExecInRegister conta o número de vezes que um processo aparece num registo.
+ * 
+ * @param reg O registo a ser considerado na contagem.
+ * @param exec O processo a ser contado.
+ * 
+ * @return O número de vezes que o processo aparece.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023 
+*/
 int countExecInRegister(Register reg, char exec[])
 {
     /* Variável que armazena a quantidade de vezes que aparece o processo */
@@ -250,6 +271,17 @@ int countExecInRegister(Register reg, char exec[])
     return count;
 }
 
+/**
+ * A função addExecRegisterUnique adiciona todos os processos de um registo que ainda não estejam no array dinâmico.
+ * 
+ * @param reg O registo de onde devem ser adicionados os processos.
+ * @param arr O array dinâmico onde vão ser guardados os processos únicos.
+ * 
+ * @return O array dinâmico atualizado com os novos processos.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023 
+*/
 char ** addExecRegisterUnique(Register reg, char ** arr)
 {
     /* Percorre a lista de processos no registo (no caso de ser um pipeline) e adiciona os inexistentes ao array */

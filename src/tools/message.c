@@ -106,11 +106,11 @@ int messageListen(int listener, void (*printer)(Message))
 
         /* Executa o término do processo na fila, caso seja o caso */
         if (buffer->type == TYPE_PROCESS_END)
-            mapProcessQueue(buffer->pid, 0);
+            removeProcessQueue(buffer->pid);
 
         /* Executa um pedido status da fila de processos, caso seja o caso */
         if (buffer->type == TYPE_STATUSREQUEST)
-            mapProcessQueue(buffer->pid, 1);
+            mapProcessQueue(buffer->pid);
     }
 
     /* Destruição da variável de buffer de mensagens */

@@ -85,7 +85,7 @@ char ** reallocDArray(char ** arr, int size)
     char ** tmp = realloc(arr, sizeof(char*) * size);
 
     /* Verifica se o realloc foi bem sucedido */
-    if (tmp)
+    if (tmp == NULL)
         destroyDArray(arr);
 
     /* Devolve o realloc */
@@ -136,6 +136,18 @@ char ** insertDArray(char ** arr, char * str)
     return arr;
 }
 
+/**
+ * A função stringToDArray converte um string num array dinâmico separando o string em vários elementos
+ * do array através de um delimitador.
+ * 
+ * @param str O string a ser convertido.
+ * @param delim O delimitador que separa o string.
+ * 
+ * @return O array dinâmico criado.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
 char ** stringToDArray(char * str, char * delim)
 {
     /* Cria o array dinâmico */
@@ -149,6 +161,17 @@ char ** stringToDArray(char * str, char * delim)
     return new;
 }
 
+/**
+ * A função checkIfInDArray verifica se um elemento está num array dinâmico.
+ * 
+ * @param arr O array dinâmico onde a verificação vai ser feita.
+ * @param str O elemento a ser verificado dentro do array.
+ * 
+ * @return A conclusão a que chega o processo.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023 
+*/
 int checkIfInDArray(char ** arr, char * str)
 {
     /* Variável que irá armazenar o resultado da verificação */

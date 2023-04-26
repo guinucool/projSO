@@ -13,7 +13,8 @@ typedef struct __PROCESS__ *Process;
 
 /* Functions */
 void addProcessQueue(pid_t pid, char exec[], long start);
-void mapProcessQueue(pid_t pid, char mode);
+void removeProcessQueue(pid_t pid);
+void mapProcessQueue(pid_t pid);
 int executeProcess(char cmd[]);
 int processStatusResquest();
 
