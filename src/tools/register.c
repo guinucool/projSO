@@ -6,8 +6,10 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "../../includes/tools/message.h"
 #include "../../includes/tools/dynarray.h"
 #include "../../includes/tools/register.h"
+#include "../../includes/utils.h"
 
 /**
  * @struct __REGISTER__
@@ -231,22 +233,6 @@ int registerProcess(pid_t pid, char exec[], long time, char path[])
 }
 
 /**
- * A função getRegisterTime devolve o tempo de execução associado a um processo num registo.
- * 
- * @param reg O registo de onde se pretende obter o tempo de execução.
- * 
- * @return O tempo de execução do registo.
- * 
- * @author Guilherme Oliveira
- * @date 26/04/2023 
-*/
-long getRegisterTime(Register reg)
-{
-    /* Devolve o tempo de execução de um registo */
-    return reg->time;
-}
-
-/**
  * A função countExecInRegister conta o número de vezes que um processo aparece num registo.
  * 
  * @param reg O registo a ser considerado na contagem.
@@ -286,9 +272,96 @@ char ** addExecRegisterUnique(Register reg, char ** arr)
 {
     /* Percorre a lista de processos no registo (no caso de ser um pipeline) e adiciona os inexistentes ao array */
     for (char * token = strtok(reg->exec, " | "); token && arr; token = strtok(NULL, " | "))
-        if (checkIfInDArray(arr, token))
+        if (!checkIfInDArray(arr, token))
             arr = insertDArray(arr, token);
 
     /* Devolve o array atualizado de acordo com as regras */
     return arr;
+}
+
+void registerStats(pid_t pid, char type, char filter[], char path[])
+{
+    /* Cria um filho que executará os cálculos estatísticos necessários */
+    if (fork() == 0)
+    {
+        /* Converte o string filter numa lista de pids */
+        char ** pids = stringToDArray(filter, " ");
+
+        /* Verifica se a conversão ocorreu */
+        if (pids == NULL)
+            errorChildHandler(-1, SERVER_NAME);
+
+        /* Cria o array dinâmico que irá armazenar o resultado */
+        char ** res = createDArray();
+
+        /* Armazena o tempo total ocupado pelos processos ou o número de vezes que um processo correu */
+        long time = 0;
+
+        /* Indica o começo da lista de pids */
+        int start = 0;
+        if (type == TYPE_STATSCMD) start = 1;
+
+        /* Percorre todos os processos */
+        for (int i = start; pids[i] && res; i++)
+        {
+            /* Lê o registo pretendido */
+            Register reg = readRegister(atoi(pids[i]), path);
+
+            /* Verifica se a leitura do registo foi bem sucedida */
+            if (reg == NULL)
+                errorChildHandler(-1, SERVER_NAME);
+
+            /* Conta o tempo, caso esteja em modo stats-time */
+            if (type == TYPE_STATSTIME)
+                time += reg->time;
+
+            /* Conta a quantidade de vezes que um processo foi executado, caso esteja em modo stats-command */
+            if (type == TYPE_STATSCMD)
+                time += countExecInRegister(reg, pids[0]);
+
+            /* Cria um array de processos unicos, caso esteja em modo stats-uniq */
+            if (type == TYPE_STATSUNIQ)
+                res = addExecRegisterUnique(reg, res);
+
+            /* Destroí a variável auxiliar que armazena o registo lido */
+            destroyRegister(reg);
+        }
+
+        /* Verifica se o array dinâmico realmente existe */
+        if (res)
+        {
+            /* Adiciona o conteúdo a imprimir caso esteja em modo stats-time */
+            if (type == TYPE_STATSTIME)
+                res = insertDArray(res, MSG_CONTENT_EMPTY);
+
+            /* Adiciona o conteúdo a imprimir caso esteja em modo stats-command */
+            if (type == TYPE_STATSCMD)
+                res = insertDArray(res, pids[0]);
+        }
+
+        /* Destroí o array de pids */
+        destroyDArray(pids);
+
+        /* Verifica a estabilidade do array dinâmico */
+        if (res == NULL)
+            errorChildHandler(-1, SERVER_NAME);
+
+        /* Variável que irá armazenar o path do fifo de comunicação com o cliente */
+        char path[PATH_SIZE];
+        snprintf(path, PATH_SIZE, "tmp/%d", pid);
+
+        /* Abertura e verificação da abertura do fifo de escrita */
+        int fifo = open(path, O_WRONLY);
+        errorChildHandler(fifo, SERVER_NAME);
+
+        /* Manda todos os resultados de volta ao cliente */
+        for (int i = 0; res[i]; i++)
+            errorChildHandler(messageSend(pid, TYPE_REPLY, res[i], time, fifo), SERVER_NAME);
+        
+        /* Destroí o array dinâmico de resultados */
+        destroyDArray(res);
+
+        /* Fecha o descritor do fifo */
+        close(fifo);
+    }
 }

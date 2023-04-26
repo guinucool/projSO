@@ -12,13 +12,19 @@
  * A função main irá executar o servidor (monitor) e criar o necessário à
  * sua execução (FIFO e os descritores de escrita e leitura). 
  * 
+ * @param argc O número de parametros recebidos pelo monitor.
+ * @param argv Os parâmetros recebidos pelo monitor.
+ * 
  * @return O estado em que o programa foi concluído.
  * 
  * @author Guilherme Oliveira
  * @date 23/04/2023
 */
-int main()
+int main(int argc, char * argv[])
 {
+    /* Verificação do número de argumentos recebidos */
+    argHandler(argc, 2, SERVER_NAME);
+
     /* Criação e verificação do fifo de comunicação entre servidor e cliente */
     int create = mkfifo(FIFO_PATH, 0666);
     errorHandler(create, SERVER_NAME);
@@ -32,7 +38,7 @@ int main()
     errorHandler(blocker, SERVER_NAME);
     
     /* Leitura das mensagens recebidas dos clientes */
-    int res = messageListen(listener, printDebugMessage);
+    int res = messageListen(listener, printDebugMessage, argv[1]);
 
     /* Fecho dos escritores e do fifo */
     close(listener);

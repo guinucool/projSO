@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include "../../includes/tools/message.h"
 #include "../../includes/tools/process.h"
+#include "../../includes/tools/dynarray.h"
+#include "../../includes/tools/register.h"
 #include "../../includes/utils.h"
 
 /**
@@ -78,13 +80,15 @@ void destroyMessage(Message msg)
  * que recebe de acordo com as suas necessidades e informações. 
  * 
  * @param listener O descritor de leitura de onde o servidor irá ler as mensagens.
+ * @param printer A função que imprime uma mensagem de acordo com o pretendido quando a recebe.
+ * @param pidpath O caminho para a pasta de pids (caso seja necessário).
  * 
  * @return O resultado da operação (sucesso ou erro).
  * 
  * @author Guilherme Oliveira
  * @date 16/04/2023
 */
-int messageListen(int listener, void (*printer)(Message))
+int messageListen(int listener, void (*printer)(Message), char * pidpath)
 {
     /* Variáveis auxiliares de leitura */
     Message buffer = malloc(sizeof(NPMessage)); //!< Buffer de leitura de uma mensagem
@@ -105,12 +109,24 @@ int messageListen(int listener, void (*printer)(Message))
             addProcessQueue(buffer->pid, buffer->msg, buffer->time);
 
         /* Executa o término do processo na fila, caso seja o caso */
-        if (buffer->type == TYPE_PROCESS_END)
-            removeProcessQueue(buffer->pid);
+        if (buffer->type == TYPE_PROCESS_END || buffer->type == TYPE_PROCESS_FAIL)
+            removeProcessQueue(buffer->pid, buffer->time, pidpath, buffer->type);
 
         /* Executa um pedido status da fila de processos, caso seja o caso */
         if (buffer->type == TYPE_STATUSREQUEST)
             mapProcessQueue(buffer->pid);
+
+        /* Executa um pedido stats-time de processos, caso seja o caso */
+        if (buffer->type == TYPE_STATSTIMEREQUEST)
+            registerStats(buffer->pid, TYPE_STATSTIME, buffer->msg, pidpath);
+
+        /* Executa um pedido stats-command de processos, caso seja o caso */
+        if (buffer->type == TYPE_STATSCMDREQUEST)
+            registerStats(buffer->pid, TYPE_STATSCMD, buffer->msg, pidpath);
+
+        /* Executa um pedido stats-uniq de processos, caso seja o caso */
+        if (buffer->type == TYPE_STATSUNIQREQUEST)
+            registerStats(buffer->pid, TYPE_STATSUNIQ, buffer->msg, pidpath);
     }
 
     /* Destruição da variável de buffer de mensagens */
@@ -187,6 +203,95 @@ int messageSend(pid_t pid, char type, char content[], long time, int fifo)
 }
 
 /**
+ * A função messageRequest executa para o servidor um pedido de status/stats de processos e prepara
+ * um processo que irá ouvir e imprimir os resultados vindos do servidor.
+ * 
+ * @param type O tipo de informação pretendida do servidor.
+ * @param argv Os argumentos recebidos pelo tracer (para saber quais são os filtros).
+ * @param argc O número de argumentos recebidos.
+ * @param printer A função que irá imprimir a informação recebida do servidor.
+ * 
+ * @return O resultado da operação (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 25/04/2023
+*/
+int messageResquest(char type, char * argv[], int argc, void (*printer)(Message))
+{    
+    /* Descobre o pid do processo em execução neste momento */
+    pid_t pid = getpid();
+
+    /* Cria o caminho para o fifo que irá criar para comunicar com o servidor */
+    char path[PATH_SIZE];
+    snprintf(path, PATH_SIZE, "tmp/%d", pid);
+
+    /* Cira o fifo de comunicação com o servidor */
+    int create = mkfifo(path, 0666);
+
+    /* Verificação se a criação foi bem sucedida */
+    if (create < 0)
+        return -1;
+
+    /* Abertura do fifo para escrita */
+    int sender = open(FIFO_PATH, O_WRONLY);
+
+    /* Verificação de abertura do fifo */
+    if (sender < 0)
+        return -1;
+
+    /* Cria um array dinâmico auxiliar */
+    char ** args = createDArray();
+
+    /* Converte os argumentos num array dinâmico */
+    for (int i = 2; i < argc && type != TYPE_STATUSREQUEST && args; i++)
+        args = insertDArray(args, argv[i]);
+
+    /* Verifica se a converção dos argumentos foi bem sucedida */
+    if (args == NULL)
+        return -1;
+
+    /* Variável que armazena a mensagem a enviar */
+    char msg[MSG_SIZE] = { 0 };
+
+    /* Cria a mensagem a enviar */
+    darrayToString(args, msg, " ", MSG_SIZE);
+
+    /* Liberta o array dinâmico */
+    destroyDArray(args);
+
+    /* Envia mensagem de pedido para o servidor */
+    int send = messageSend(pid, type, msg, getTimeMilliseconds(), sender);
+
+    /* Fecha o fifo de escrita */
+    close(sender);
+
+    /* Verificação do envio da mensagem */
+    if (send < 0)
+        return -1;
+
+    /* Cria o descritor de leitura do fifo */
+    int listener = open(path, O_RDONLY);
+
+    /* Verificação da abertura do descritor */
+    if (listener < 0)
+        return -1;
+
+    /* Leitura das mensagens recebidas do servidor */
+    int res = messageListen(listener, printer, NULL);
+
+    /* Fecha o descritor e o fifo */
+    close(listener);
+    unlink(path);
+
+    /* Verificação do resultado da leitura das mensagens do servidor */
+    if (res < 0)
+        return -1;
+
+    /* Termino do processo em sucesso */
+    return 0;
+}
+
+/**
  * A função printDebugMessage imprime uma mensagem para o stdout em formato de debug.
  * 
  * @param msg A mensagem a se imprimir.
@@ -216,4 +321,22 @@ void printStatusMessage(Message msg)
 {
     /* Imprime o output que se pretende */
     printf("%d %s %ld ms\n", msg->pid, msg->msg, msg->time);
+}
+
+void printStatsTimeMessage(Message msg)
+{
+    /* Imprime o output que se pretende */
+    printf("Total execution time is %ld ms\n", msg->time);
+}
+
+void printStatsCmdMessage(Message msg)
+{
+    /* Imprime o output que se pretende */
+    printf("%s was executed %ld times\n", msg->msg, msg->time);
+}
+
+void printStatsUniqMessage(Message msg)
+{
+    /* Imprime o output que se pretende */
+    printf("%s\n", msg->msg);
 }

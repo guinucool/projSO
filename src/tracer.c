@@ -43,7 +43,28 @@ int main(int argc, char * argv[])
     /* Caso o modo de execução seja status */
     else if (strcmp(argv[1], "status") == 0)
     {
-        int res = processStatusResquest();
+        int res = messageResquest(TYPE_STATUSREQUEST, argv, argc, printStatusMessage);
+        errorHandler(res, CLIENT_NAME);
+    }
+
+    /* Caso o modo de execução seja stats-time */
+    else if (strcmp(argv[1], "stats-time") == 0)
+    {
+        int res = messageResquest(TYPE_STATSTIMEREQUEST, argv, argc, printStatsTimeMessage);
+        errorHandler(res, CLIENT_NAME);
+    }
+
+    /* Caso o modo de execução seja stats-command */
+    else if (strcmp(argv[1], "stats-command") == 0)
+    {
+        int res = messageResquest(TYPE_STATSCMDREQUEST, argv, argc, printStatsCmdMessage);
+        errorHandler(res, CLIENT_NAME);
+    }
+
+    /* Caso o modo de execução seja stats-uniq */
+    else if (strcmp(argv[1], "stats-uniq") == 0)
+    {
+        int res = messageResquest(TYPE_STATSUNIQREQUEST, argv, argc, printStatsUniqMessage);
         errorHandler(res, CLIENT_NAME);
     }
 

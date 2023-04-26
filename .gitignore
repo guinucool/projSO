@@ -9,3 +9,4 @@ tracer
 bin/*
 obj/*
 tmp/*
+pids/*

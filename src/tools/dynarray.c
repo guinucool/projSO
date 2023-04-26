@@ -126,7 +126,7 @@ char ** insertDArray(char ** arr, char * str)
     strncpy(arr[size], str, len);
 
     /* Aumenta o array */
-    arr = reallocDArray(arr, size + 1);
+    arr = reallocDArray(arr, size + 2);
 
     /* Atualiza a última posição do array para o limitador caso a realocação tenha sido um sucesso */
     if (arr)
@@ -159,6 +159,35 @@ char ** stringToDArray(char * str, char * delim)
     
     /* Devolve o array criado */
     return new;
+}
+
+/**
+ * A função darrayToString converte um array dinâmico para um string.
+ * 
+ * @param arr O array dinâmico a ser convertido.
+ * @param dest O string de destino da conversão.
+ * @param delim O delimitador dentro do string dos vários elementos.
+ * @param size O tamanho disponível no string.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
+void darrayToString(char ** arr, char * dest, char * delim, int size)
+{
+    /* Reserva o espaço final para o caracter nulo */
+    size--;
+
+    /* Percorre o array adicionando os seus elementos ao string separados por um delimitador */
+    for (int i = 0; arr[i] && size > 0; i++)
+    {
+        /* Adiciona o elemento ao string e remove o espaço disponível de acordo */
+        strncat(dest, arr[i], size);
+        size -= strlen(arr[i]);
+
+        /* Adiciona o delimitador ao string e remove o espaço disponível de acordo */
+        strncat(dest, delim, size);
+        size -= strlen(delim);
+    }
 }
 
 /**

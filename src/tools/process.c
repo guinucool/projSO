@@ -9,6 +9,7 @@
 #include "../../includes/tools/message.h"
 #include "../../includes/tools/process.h"
 #include "../../includes/tools/dynarray.h"
+#include "../../includes/tools/register.h"
 #include "../../includes/utils.h"
 
 /**
@@ -172,14 +173,15 @@ void addProcessQueue(pid_t pid, char exec[], long start)
 }
 
 /**
- * A função removeProcessQueue desativa um processo que se encontra presente na fila de processos.
+ * A função removeProcessQueue desativa um processo que se encontra presente na fila de processos e armazena-o.
  * 
  * @param pid O pid do processo a remover.
+ * @param pidpath O caminho para a pasta de pids onde o registo do processo vai ser armazenado.
  * 
  * @author Guilherme Oliveira
  * @date 26/04/2023
 */
-void removeProcessQueue(pid_t pid)
+void removeProcessQueue(pid_t pid, long end, char * pidpath, char type)
 {
     /* Cria um processo-filho que irá desativar o processo na fila */
     if (fork() == 0)
@@ -199,9 +201,16 @@ void removeProcessQueue(pid_t pid)
         /* Lê a fila de espera até encontrar a posição em que o processo pretendido está */
         while ((bytes_read = read(queue, process, sizeof(NPProcess))) > 0 && process->pid != pid);
         
-        /* Caso o processo tenha sido encontrado, desativa-o e verifica e sucesso nessa operação */
+        /* Caso o processo tenha sido encontrado */
         if (bytes_read > 0)
+        {
+            /* Desativa o processo e verifica o sucesso nessa operação */
             errorChildHandler(dequeueProcess(process, queue), SERVER_NAME);
+
+            /* Regista o processo e verifica o sucesso nessa operação */
+            if (type == TYPE_PROCESS_END)
+                errorChildHandler(registerProcess(process->pid, process->exec, end - process->start, pidpath), SERVER_NAME);
+        }
 
         /* Destroí o processo e fecha a fila */
         destroyProcess(process);
@@ -258,7 +267,7 @@ void mapProcessQueue(pid_t pid)
                 long duration = getTimeMilliseconds() - process->start;
 
                 /* Envia e verifica o envio da mensagem de volta ao cliente */
-                int res = messageSend(process->pid, TYPE_STATUSREPLY, process->exec, duration, statusfifo);
+                int res = messageSend(process->pid, TYPE_REPLY, process->exec, duration, statusfifo);
                 errorChildHandler(res, SERVER_NAME);
             }
         }
@@ -343,8 +352,15 @@ int executeProcess(char cmd[])
     /* Imprime o tempo que o programa demorou */
     printf("Ended in %ld ms\n", (end - start));
 
+    /* Define o tipo de mensagem a ser enviada para o servidor */
+    char type = TYPE_PROCESS_END;
+
+    /* Verifica se o filho terminou em sucesso */
+    if (!WIFEXITED(status) || WEXITSTATUS(status))
+        type = TYPE_PROCESS_FAIL;
+
     /* Notificação do final do processo ao servidor */
-    int notify = messageSend(cpid, TYPE_PROCESS_END, exec[0], end, sender);
+    int notify = messageSend(cpid, type, exec[0], end, sender);
 
     /* Fecha o fifo de escrita */
     close(sender);
@@ -367,69 +383,5 @@ int executeProcess(char cmd[])
         return -1;
 
     /* Termina o processo em sucesso */
-    return 0;
-}
-
-/**
- * A função processStatusRequest executa para o servidor um pedido de status da fila de processos e prepara
- * um processo que irá ouvir e imprimir os resultados vindos do servidor.
- * 
- * @return O resultado da operação (sucesso ou erro).
- * 
- * @author Guilherme Oliveira
- * @date 25/04/2023
-*/
-int processStatusResquest()
-{
-    /* Descobre o pid do processo em execução neste momento */
-    pid_t pid = getpid();
-
-    /* Cria o caminho para o fifo que irá criar para comunicar com o servidor */
-    char path[PATH_SIZE];
-    snprintf(path, PATH_SIZE, "tmp/%d", pid);
-
-    /* Cira o fifo de comunicação com o servidor */
-    int create = mkfifo(path, 0666);
-
-    /* Verificação se a criação foi bem sucedida */
-    if (create < 0)
-        return -1;
-
-    /* Abertura do fifo para escrita */
-    int sender = open(FIFO_PATH, O_WRONLY);
-
-    /* Verificação de abertura do fifo */
-    if (sender < 0)
-        return -1;
-
-    /* Envia mensagem de pedido para o servidor */
-    int send = messageSend(pid, TYPE_STATUSREQUEST, MSG_CONTENT_EMPTY, getTimeMilliseconds(), sender);
-
-    /* Fecha o fifo de escrita */
-    close(sender);
-
-    /* Verificação do envio da mensagem */
-    if (send < 0)
-        return -1;
-
-    /* Cria o descritor de leitura do fifo */
-    int listener = open(path, O_RDONLY);
-
-    /* Verificação da abertura do descritor */
-    if (listener < 0)
-        return -1;
-
-    /* Leitura das mensagens recebidas do servidor */
-    int res = messageListen(listener, printStatusMessage);
-
-    /* Fecha o descritor e o fifo */
-    close(listener);
-    unlink(path);
-
-    /* Verificação do resultado da leitura das mensagens do servidor */
-    if (res < 0)
-        return -1;
-
-    /* Termino do processo em sucesso */
     return 0;
 }
