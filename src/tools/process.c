@@ -385,3 +385,206 @@ int executeProcess(char cmd[])
     /* Termina o processo em sucesso */
     return 0;
 }
+
+/**
+ * A função executePipeProcess executa um processo de um pipe de forma a usar o descritores necessários
+ * para o processo seguinte.
+ * 
+ * @param exe O processo que se pretende executar nesta fase.
+ * @param write O descritor onde vai ser escrito para o próximo processo (NULL no último processo).
+ * @param read O descritor onde vai ser lido o resultado do processo anterior (NULL no primeiro processo).
+ * 
+ * @author Guilherme Oliveira
+ * @date 12/05/2023
+*/
+void executePipeProcess(char ** exe, int * write, int * read)
+{
+    /* Cria o filho que irá executar o processo */
+    if (fork() == 0)
+    {
+        /* Altera o stdout para o escritor (no caso de este ser necessário para um próximo processo) */
+        if (write)
+        {
+            close(write[0]);
+            dup2(write[1], 1);
+            close(write[1]);
+        }
+
+        /* Altera o stdin para o leitor (no caso de este ser necessário de um processo anterior) */
+        if (read)
+        {
+            dup2(read[0], 0);
+            close(read[0]);
+        }
+        
+        /* Execute e verifica a execução do programa */
+        int res = execvp(exe[0], exe);
+        destroyDArray(exe);
+        errorChildHandler(res, CLIENT_NAME);
+
+        /* Termina o processo em sucesso */
+        _exit(0);
+    }   
+}
+
+/**
+ * @brief 
+ * 
+ * @param cmd 
+ * @return int 
+ */
+int executePipeline(char ** cmd[], int N)
+{
+    /* Variável que irá armazenar os vários pipes */
+    int pi[N-1][2];
+
+    /* Execução da pipeline */
+    for (int i = 0; i < N; i++)
+    {
+        /* Criação do pipes de comunicação entre execs */
+        if (i < N - 1) {
+
+            /* Verifica se a criação do pipe foi bem sucedida */
+            if (pipe(pi[i]) < 0)
+                return -1;
+        }
+
+        /* Execução do primeiro processo */
+        if (i == 0)
+            executePipeProcess(cmd[i], pi[i], NULL);
+
+        /* Execução do último processo */
+        else if (i == N - 1)
+            executePipeProcess(cmd[i], NULL, pi[i-1]);
+
+        /* Execução de qualquer outro processo */
+        else
+            executePipeProcess(cmd[i], pi[i], pi[i-1]);
+
+        /* Fecha a escrita de um processo já terminado */
+        if (i < N - 1) close(pi[i][1]);
+        
+        /* Fecha a leitura de um processo já lido */
+        if (i > 0) close(pi[i-1][0]);
+    }
+
+    /* Verifica se a pipe falha */
+    int fail = 0;
+
+    /* Status dos processos terminado */
+    int status;
+    
+    /* Espera pelo termino dos vários pipes */
+    for (int i = 0; i < N; i++)
+    {   
+        /* Espera pelos vários processos */
+        if (fail == 0)
+            wait(&status);
+        else
+            wait(NULL);
+
+        /* Verifica se o filho terminou em sucesso */
+        if (!WIFEXITED(status) || WEXITSTATUS(status))
+            fail = -1;
+    }
+
+    /* Devolve o resultado do pipeline */
+    return fail;
+}
+
+int executePipe(char cmd[])
+{
+    /* Abertura do fifo para escrita */
+    int sender = open(FIFO_PATH, O_WRONLY);
+
+    /* Verificação de abertura do fifo */
+    if (sender < 0)
+        return -1;
+
+    /* Descobre quantos execs vai precisar */
+    int N = countStrOccr(cmd, '|') + 1;
+
+    /* Variável que irá armazenar os argumentos do programa */
+    char ** exec[N];
+
+    /* Cria o array múltiplo e verifica a sua criação */
+    if (stringToMultipleDArray(exec, N, cmd, '|', ' ') < 0)
+        return -1;
+
+    /* Descobre o timestamp de início do processo */
+    long start = getTimeMilliseconds();
+
+    /* Cria o processo-filho que executa o programa */
+    if (fork() == 0)
+    {
+        /* Descobre o pid do processo-filho */
+        pid_t pid = getpid();
+
+        /* Cria array de mensagem */
+        char msg[MSG_SIZE];
+
+        /* Converte o array múltiplo em string */
+        
+
+        /* Notificação de um processo ao servidor e verificação do sucesso da notificação, tal como fecho do descritor de leitura (dentro do filho) */
+        int notify = messageSend(pid, TYPE_PROCESS_START, exec[0], start, sender);
+        close(sender);
+        errorChildHandler(notify, CLIENT_NAME);
+
+        /* Imprime notificação do programa a correr */
+        printf("Running PID %d\n", pid);
+
+        /* Executa e verifica a execução do programa */
+        int res = execvp(exec[0], exec);
+        destroyDArray(exec);
+        errorChildHandler(res, CLIENT_NAME);
+
+        /* Retorna o resultado do programa */
+        _exit(0);
+    }
+
+    /* Variável que irá verificar o estado final do programa que foi executado */
+    int status;
+
+    /* Espera que o processo-filho termine a execução */
+    pid_t cpid = wait(&status);
+
+    /* Descobre o timestamp no fim da execução do processo */
+    long end = getTimeMilliseconds();
+
+    /* Imprime o tempo que o programa demorou */
+    printf("Ended in %ld ms\n", (end - start));
+
+    /* Define o tipo de mensagem a ser enviada para o servidor */
+    char type = TYPE_PROCESS_END;
+
+    /* Verifica se o filho terminou em sucesso */
+    if (!WIFEXITED(status) || WEXITSTATUS(status))
+        type = TYPE_PROCESS_FAIL;
+
+    /* Notificação do final do processo ao servidor */
+    int notify = messageSend(cpid, type, exec[0], end, sender);
+
+    /* Fecha o fifo de escrita */
+    close(sender);
+
+    /* Destroí o array auxiliar de argumentos */
+    destroyDArray(exec);
+    
+    /* Verificação do sucesso da notificação */
+    if (notify < 0)
+        return -1;
+
+    /* Verifica o estado de conclusão do processo */
+    if (WIFEXITED(status)) {
+
+        /* Verifica se algum processo dentro do filho falhou*/
+        if(WEXITSTATUS(status))
+            exit(1);
+    }
+    else
+        return -1;
+
+    /* Termina o processo em sucesso */
+    return 0;
+}

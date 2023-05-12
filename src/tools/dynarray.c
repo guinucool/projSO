@@ -213,3 +213,86 @@ int checkIfInDArray(char ** arr, char * str)
     /* Devolve o resultado a que chegou */
     return !res;
 }
+
+/**
+ * A função stringToMultipleDArray converte um string num DArray múltiplo.
+ * 
+ * @param arr O array para onde vão ser armazenados os vários DArrays.
+ * @param N O número de elementos que o array possui disponíveis.
+ * @param str O string a ser convertido.
+ * @param delim1 O delimitador para o array múltiplo.
+ * @param delim2 O delimitador para o DArray.
+ * 
+ * @return O resultado da operação (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 12/05/2023
+*/
+int stringToMultipleDArray(char ** arr[], int N, char * str, char delim1, char delim2)
+{
+    /* Variável auxiliar de contagem do array */
+    int i = 0;
+
+    /* Converte o string através do delimitador */
+    for (char * token = strtok(str, delim1); token && i < N; token = strtok(NULL, delim1))
+    {
+
+        /* Constroi um DArray em cada posição do array múltiplo */
+        arr[i] = stringToDArray(token, delim2);
+
+        /* Verifica o sucesso da construção */
+        if (arr[i] == NULL)
+            return 1;
+
+        /* Passa à próxima posição */
+        i++;
+    }
+    
+    /* Devolve um sucesso */
+    return 0;
+}
+
+/**
+ * A função destroyMultipleDArray destroí um DArray múltiplo. 
+ * 
+ * @param arr O array múltiplo a ser destruído.
+ * @param N O tamanho do array múltiplo que vai ser destruído.
+ * 
+ * @author Guilherme Oliveira
+ * @date 12/05/2023
+*/
+void destroyMultipleDArray(char ** arr[], int N)
+{
+    for (int i = 0; i < N; i++)
+        destroyDArray(arr[i]);
+}
+
+/**
+ * A função multipleToString converte um array múltiplo num string.
+ * 
+ * @param arr O array a ser convertido.
+ * @param N O tamanho do array a ser convertido.
+ * @param dest O string de destino.
+ * @param delim O delimitador do string de destino.
+ * @param size O tamanho restante para o string.
+ * 
+ * @author Guilherme Oliveira
+ * @date 12/05/2023
+*/
+void multipleToString(char ** arr[], int N, char * dest, char * delim, int size)
+{
+    /* Reserva espaço para o caracter nulo */
+    size--;
+
+    /* Percorre o array adicionando os seus elementos ao string separados por um delimitador */
+    for (int i = 0; i < N && size > 0; i++)
+    {
+        /* Adiciona o elemento ao string e remove o espaço disponível de acordo */
+        strncat(dest, arr[i][0], size);
+        size -= strlen(arr[i][0]);
+
+        /* Adiciona o delimitador ao string e remove o espaço disponível de acordo */
+        strncat(dest, delim, size);
+        size -= strlen(delim);
+    }
+}

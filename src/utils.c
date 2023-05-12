@@ -93,3 +93,28 @@ void errorChildHandler(int err, char prog[])
         _exit(1);
     }
 }
+
+/**
+ * A função countStrOccr conta o número de ocorrências de um caracter numa string.
+ * 
+ * @param str O string onde se pretende efetuar a contagem.
+ * @param delim O delimitador que se pretende contar.
+ * 
+ * @return O número de vezes que o delimitador aparece.
+ * 
+ * @author Guilherme Oliveira
+ * @date 12/05/2023
+*/
+int countStrOccr(char str[], char delim)
+{
+    /* Variável que irá armazenar a contagem */
+    int count = 0;
+
+    /* Percorre o string em busca do delimitador */
+    for (int i = 0; str[i]; i++)
+        if (str[i] == delim)
+            count++;
+    
+    /* Devolve o numero de vezes que o delimitador apareceu */
+    return count;
+}

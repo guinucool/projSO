@@ -13,5 +13,6 @@ long getTimeMilliseconds();
 void errorHandler(int err, char prog[]);
 void argHandler(int err, int arg, char prog[]);
 void errorChildHandler(int err, char prog[]);
+int countStrOccr(char str[], char delim);
 
 #endif
