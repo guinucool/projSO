@@ -15,6 +15,8 @@
 #define TYPE_STATSUNIQREQUEST 'U'
 #define TYPE_REPLY 'R'
 
+#define TYPE_SHUTDOWN 'W'
+
 /* Default messages */
 #define MSG_CONTENT_EMPTY "empty"
 
@@ -27,6 +29,7 @@ int messageSend(pid_t pid, char type, char content[], long time, int fifo);
 
 /* Requester */
 int messageResquest(char type, char * argv[], int argc, void (*printer)(Message));
+int shutdownRequest();
 
 /* Printers */
 void printDebugMessage(Message msg);

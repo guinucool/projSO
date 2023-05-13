@@ -127,6 +127,10 @@ int messageListen(int listener, void (*printer)(Message), char * pidpath)
         /* Executa um pedido stats-uniq de processos, caso seja o caso */
         if (buffer->type == TYPE_STATSUNIQREQUEST)
             registerStats(buffer->pid, TYPE_STATSUNIQ, buffer->msg, pidpath);
+
+        /* Desliga o servidor */
+        if (buffer->type == TYPE_SHUTDOWN)
+            break;
     }
 
     /* Destruição da variável de buffer de mensagens */
@@ -363,4 +367,35 @@ void printStatsUniqMessage(Message msg)
 {
     /* Imprime o output que se pretende */
     printf("%s\n", msg->msg);
+}
+
+/**
+ * A função shutdownRequest envia um pedido para desligar o servidor.
+ * 
+ * @return O resultado da operação (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 13/05/2023
+*/
+int shutdownRequest()
+{
+    /* Abertura do fifo para escrita */
+    int sender = open(FIFO_PATH, O_WRONLY);
+
+    /* Verificação de abertura do fifo */
+    if (sender < 0)
+        return -1;
+
+    /* Envia mensagem de pedido para o servidor */
+    int send = messageSend(getpid(), TYPE_SHUTDOWN, MSG_CONTENT_EMPTY, getTimeMilliseconds(), sender);
+
+    /* Fecha o fifo de escrita */
+    close(sender);
+
+    /* Verificação do envio da mensagem */
+    if (send < 0)
+        return -1;
+
+    /* Devolve um sucesso */
+    return 0;
 }

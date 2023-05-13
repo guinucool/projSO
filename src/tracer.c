@@ -22,6 +22,9 @@ int main(int argc, char * argv[])
     /* Verificação do número de argumentos recebidos */
     argHandler(argc, 2, CLIENT_NAME);
 
+    /* Variável que irá armazenar um resultado */
+    int res = 0;
+
     /* Caso o modo de execução seja execute */
     if (strcmp(argv[1], "execute") == 0)
     {
@@ -36,16 +39,12 @@ int main(int argc, char * argv[])
                 argHandler(-1, 0, CLIENT_NAME);
 
             /* Executa o programa */
-            int res = executeProcess(argv[3]);
-            errorHandler(res, CLIENT_NAME);
+            res = executeProcess(argv[3]);
         }
 
         /* Caso a flag do execute seja a de um pipeline */
         else if (strcmp(argv[2], "-p") == 0)
-        {
-            int res = executeProcess(argv[3]);
-            errorHandler(res, CLIENT_NAME);
-        }
+            res = executeProcess(argv[3]);
 
         /* Caso a flag do execute seja desconhecida */
         else
@@ -54,35 +53,30 @@ int main(int argc, char * argv[])
 
     /* Caso o modo de execução seja status */
     else if (strcmp(argv[1], "status") == 0)
-    {
-        int res = messageResquest(TYPE_STATUSREQUEST, argv, argc, printStatusMessage);
-        errorHandler(res, CLIENT_NAME);
-    }
+        res = messageResquest(TYPE_STATUSREQUEST, argv, argc, printStatusMessage);
 
     /* Caso o modo de execução seja stats-time */
     else if (strcmp(argv[1], "stats-time") == 0)
-    {
-        int res = messageResquest(TYPE_STATSTIMEREQUEST, argv, argc, printStatsTimeMessage);
-        errorHandler(res, CLIENT_NAME);
-    }
+        res = messageResquest(TYPE_STATSTIMEREQUEST, argv, argc, printStatsTimeMessage);
 
     /* Caso o modo de execução seja stats-command */
     else if (strcmp(argv[1], "stats-command") == 0)
-    {
-        int res = messageResquest(TYPE_STATSCMDREQUEST, argv, argc, printStatsCmdMessage);
-        errorHandler(res, CLIENT_NAME);
-    }
+        res = messageResquest(TYPE_STATSCMDREQUEST, argv, argc, printStatsCmdMessage);
 
     /* Caso o modo de execução seja stats-uniq */
     else if (strcmp(argv[1], "stats-uniq") == 0)
-    {
-        int res = messageResquest(TYPE_STATSUNIQREQUEST, argv, argc, printStatsUniqMessage);
-        errorHandler(res, CLIENT_NAME);
-    }
+        res = messageResquest(TYPE_STATSUNIQREQUEST, argv, argc, printStatsUniqMessage);
+
+    /* Caso seja um pedido de shutdown para o servidor */
+    else if (strcmp(argv[1], "shutdown") == 0)
+        res = shutdownRequest();
 
     /* Caso o modo de execução seja desconhecido */
     else
         argHandler(-1, 0, CLIENT_NAME);
+
+    /* Verifica a ocorrência de algum erro */
+    errorHandler(res, CLIENT_NAME);
 
     /* Conclusão do programa em sucesso */
     return 0;
