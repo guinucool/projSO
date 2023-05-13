@@ -31,6 +31,18 @@ int main(int argc, char * argv[])
         /* Caso a flag do execute seja a de um programa individual */
         if(strcmp(argv[2], "-u") == 0)
         {
+            /* Verifica se não é uma pipe */
+            if (strstr(argv[3], "|"))
+                argHandler(-1, 0, CLIENT_NAME);
+
+            /* Executa o programa */
+            int res = executeProcess(argv[3]);
+            errorHandler(res, CLIENT_NAME);
+        }
+
+        /* Caso a flag do execute seja a de um pipeline */
+        else if (strcmp(argv[2], "-p") == 0)
+        {
             int res = executeProcess(argv[3]);
             errorHandler(res, CLIENT_NAME);
         }

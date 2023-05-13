@@ -279,6 +279,17 @@ char ** addExecRegisterUnique(Register reg, char ** arr)
     return arr;
 }
 
+/**
+ * A função registerStats cria estatísticas baseadas em registos de processos.
+ * 
+ * @param pid O pid do pedido da estatística.
+ * @param type O tipo de estatística.
+ * @param filter O filtro pretendido para as estatísticas.
+ * @param path O caminho para a pasta de pids.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
 void registerStats(pid_t pid, char type, char filter[], char path[])
 {
     /* Cria um filho que executará os cálculos estatísticos necessários */

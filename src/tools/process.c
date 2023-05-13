@@ -6,11 +6,15 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "../../includes/tools/message.h"
 #include "../../includes/tools/process.h"
 #include "../../includes/tools/dynarray.h"
 #include "../../includes/tools/register.h"
 #include "../../includes/utils.h"
+
+/* Controlo de erros */
+extern int errno;
 
 /**
  * @struct __PROCESS__
@@ -288,105 +292,6 @@ void mapProcessQueue(pid_t pid)
 }
 
 /**
- * A função executeProcess executa um processo, enviando a informação necessária ao servidor, assim como,
- * criando o processo-filho necessário à sua execução.
- * 
- * @param cmd O comando a ser executado pelo processo.
- * 
- * @return O sucesso da operação (sucesso ou erro).
- * 
- * @author Guilherme Oliveira
- * @date 24/04/2023
-*/
-int executeProcess(char cmd[])
-{
-    /* Abertura do fifo para escrita */
-    int sender = open(FIFO_PATH, O_WRONLY);
-
-    /* Verificação de abertura do fifo */
-    if (sender < 0)
-        return -1;
-
-    /* Variável que irá armazenar os argumentos do programa */
-    char ** exec = stringToDArray(cmd, " ");
-
-    /* Verificação do sucesso na criação do array que irá guardar os argumentos do array */
-    if (exec == NULL)
-        return -1;
-
-    /* Descobre o timestamp de início do processo */
-    long start = getTimeMilliseconds();
-
-    /* Cria o processo-filho que executa o programa */
-    if (fork() == 0)
-    {
-        /* Descobre o pid do processo-filho */
-        pid_t pid = getpid();
-
-        /* Notificação de um processo ao servidor e verificação do sucesso da notificação, tal como fecho do descritor de leitura (dentro do filho) */
-        int notify = messageSend(pid, TYPE_PROCESS_START, exec[0], start, sender);
-        close(sender);
-        errorChildHandler(notify, CLIENT_NAME);
-
-        /* Imprime notificação do programa a correr */
-        printf("Running PID %d\n", pid);
-
-        /* Executa e verifica a execução do programa */
-        int res = execvp(exec[0], exec);
-        destroyDArray(exec);
-        errorChildHandler(res, CLIENT_NAME);
-
-        /* Retorna o resultado do programa */
-        _exit(0);
-    }
-
-    /* Variável que irá verificar o estado final do programa que foi executado */
-    int status;
-
-    /* Espera que o processo-filho termine a execução */
-    pid_t cpid = wait(&status);
-
-    /* Descobre o timestamp no fim da execução do processo */
-    long end = getTimeMilliseconds();
-
-    /* Imprime o tempo que o programa demorou */
-    printf("Ended in %ld ms\n", (end - start));
-
-    /* Define o tipo de mensagem a ser enviada para o servidor */
-    char type = TYPE_PROCESS_END;
-
-    /* Verifica se o filho terminou em sucesso */
-    if (!WIFEXITED(status) || WEXITSTATUS(status))
-        type = TYPE_PROCESS_FAIL;
-
-    /* Notificação do final do processo ao servidor */
-    int notify = messageSend(cpid, type, exec[0], end, sender);
-
-    /* Fecha o fifo de escrita */
-    close(sender);
-
-    /* Destroí o array auxiliar de argumentos */
-    destroyDArray(exec);
-    
-    /* Verificação do sucesso da notificação */
-    if (notify < 0)
-        return -1;
-
-    /* Verifica o estado de conclusão do processo */
-    if (WIFEXITED(status)) {
-
-        /* Verifica se algum processo dentro do filho falhou*/
-        if(WEXITSTATUS(status))
-            exit(1);
-    }
-    else
-        return -1;
-
-    /* Termina o processo em sucesso */
-    return 0;
-}
-
-/**
  * A função executePipeProcess executa um processo de um pipe de forma a usar o descritores necessários
  * para o processo seguinte.
  * 
@@ -428,11 +333,17 @@ void executePipeProcess(char ** exe, int * write, int * read)
 }
 
 /**
- * @brief 
+ * A função executePipeline executa uma pipeline de processos criando os processos-filhos e os pipes necessários para
+ * tal.
  * 
- * @param cmd 
- * @return int 
- */
+ * @param cmd A lista de comandos a executar no pipeline.
+ * @param N O tamanho da lista de comandos.
+ *  
+ * @return O resultado da operação do pipeline (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 12/05/2023
+*/
 int executePipeline(char ** cmd[], int N)
 {
     /* Variável que irá armazenar os vários pipes */
@@ -486,13 +397,28 @@ int executePipeline(char ** cmd[], int N)
         /* Verifica se o filho terminou em sucesso */
         if (!WIFEXITED(status) || WEXITSTATUS(status))
             fail = -1;
+
+        /* No caso de ser uma falha de processo muda o erro de acordo */
+        if (!WIFEXITED(status))
+            errno = ECANCELED;
     }
 
     /* Devolve o resultado do pipeline */
     return fail;
 }
 
-int executePipe(char cmd[])
+/**
+ * A função executeProcess executa um processo, enviando a informação necessária ao servidor, assim como,
+ * criando o processo-filho necessário à sua execução.
+ * 
+ * @param cmd O comando a ser executado pelo processo.
+ * 
+ * @return O sucesso da operação (sucesso ou erro).
+ * 
+ * @author Guilherme Oliveira
+ * @date 24/04/2023
+*/
+int executeProcess(char cmd[])
 {
     /* Abertura do fifo para escrita */
     int sender = open(FIFO_PATH, O_WRONLY);
@@ -508,8 +434,14 @@ int executePipe(char cmd[])
     char ** exec[N];
 
     /* Cria o array múltiplo e verifica a sua criação */
-    if (stringToMultipleDArray(exec, N, cmd, '|', ' ') < 0)
+    if (stringToMultipleDArray(exec, N, cmd, "|", " ") < 0)
         return -1;
+
+    /* Cria string de mensagem */
+    char msg[MSG_SIZE] = {0};
+
+    /* Converte o array múltiplo em string */
+    multipleToString(exec, N, msg, " | ", MSG_SIZE);
 
     /* Descobre o timestamp de início do processo */
     long start = getTimeMilliseconds();
@@ -520,23 +452,25 @@ int executePipe(char cmd[])
         /* Descobre o pid do processo-filho */
         pid_t pid = getpid();
 
-        /* Cria array de mensagem */
-        char msg[MSG_SIZE];
-
-        /* Converte o array múltiplo em string */
-        
-
         /* Notificação de um processo ao servidor e verificação do sucesso da notificação, tal como fecho do descritor de leitura (dentro do filho) */
-        int notify = messageSend(pid, TYPE_PROCESS_START, exec[0], start, sender);
+        int notify = messageSend(pid, TYPE_PROCESS_START, msg, start, sender);
         close(sender);
         errorChildHandler(notify, CLIENT_NAME);
 
         /* Imprime notificação do programa a correr */
         printf("Running PID %d\n", pid);
 
-        /* Executa e verifica a execução do programa */
-        int res = execvp(exec[0], exec);
-        destroyDArray(exec);
+        int res = 0;
+        /* Executa o programa */
+        if (N == 1)
+            res = execvp(exec[0][0], exec[0]);
+
+        /* Executa a pipeline */
+        else
+            res = executePipeline(exec, N);
+
+        /* Verifica as execuções */
+        destroyMultipleDArray(exec, N);
         errorChildHandler(res, CLIENT_NAME);
 
         /* Retorna o resultado do programa */
@@ -563,13 +497,13 @@ int executePipe(char cmd[])
         type = TYPE_PROCESS_FAIL;
 
     /* Notificação do final do processo ao servidor */
-    int notify = messageSend(cpid, type, exec[0], end, sender);
+    int notify = messageSend(cpid, type, msg, end, sender);
 
     /* Fecha o fifo de escrita */
     close(sender);
 
     /* Destroí o array auxiliar de argumentos */
-    destroyDArray(exec);
+    destroyMultipleDArray(exec, N);
     
     /* Verificação do sucesso da notificação */
     if (notify < 0)

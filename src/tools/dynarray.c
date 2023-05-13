@@ -184,9 +184,13 @@ void darrayToString(char ** arr, char * dest, char * delim, int size)
         strncat(dest, arr[i], size);
         size -= strlen(arr[i]);
 
-        /* Adiciona o delimitador ao string e remove o espaço disponível de acordo */
-        strncat(dest, delim, size);
-        size -= strlen(delim);
+        /* Verifica se é o último elemento */
+        if (arr[i + 1]) {
+
+            /* Adiciona o delimitador ao string e remove o espaço disponível de acordo */
+            strncat(dest, delim, size);
+            size -= strlen(delim);
+        }
     }
 }
 
@@ -228,25 +232,31 @@ int checkIfInDArray(char ** arr, char * str)
  * @author Guilherme Oliveira
  * @date 12/05/2023
 */
-int stringToMultipleDArray(char ** arr[], int N, char * str, char delim1, char delim2)
+int stringToMultipleDArray(char ** arr[], int N, char * str, char * delim1, char * delim2)
 {
-    /* Variável auxiliar de contagem do array */
-    int i = 0;
+    /* Converte o string através do delimitador para um DArray temporário */
+    char ** tmp = stringToDArray(str, delim1);
 
-    /* Converte o string através do delimitador */
-    for (char * token = strtok(str, delim1); token && i < N; token = strtok(NULL, delim1))
+    /* Verifica que o processo foi bem sucedido */
+    if (tmp == NULL)    
+        return -1;
+
+    /* Converte o array temporário através do delimitador */
+    for (int i = 0; tmp[i] && i < N; i++)
     {
-
         /* Constroi um DArray em cada posição do array múltiplo */
-        arr[i] = stringToDArray(token, delim2);
+        arr[i] = stringToDArray(tmp[i], delim2);
 
         /* Verifica o sucesso da construção */
-        if (arr[i] == NULL)
-            return 1;
-
-        /* Passa à próxima posição */
-        i++;
+        if (arr[i] == NULL) {
+            destroyMultipleDArray(arr, N);
+            destroyDArray(tmp);
+            return -1;
+        }
     }
+
+    /* Destroi o array temporário */
+    destroyDArray(tmp);
     
     /* Devolve um sucesso */
     return 0;
@@ -263,7 +273,7 @@ int stringToMultipleDArray(char ** arr[], int N, char * str, char delim1, char d
 */
 void destroyMultipleDArray(char ** arr[], int N)
 {
-    for (int i = 0; i < N; i++)
+    for (int i = 0; i < N && arr[i]; i++)
         destroyDArray(arr[i]);
 }
 
@@ -291,8 +301,12 @@ void multipleToString(char ** arr[], int N, char * dest, char * delim, int size)
         strncat(dest, arr[i][0], size);
         size -= strlen(arr[i][0]);
 
-        /* Adiciona o delimitador ao string e remove o espaço disponível de acordo */
-        strncat(dest, delim, size);
-        size -= strlen(delim);
+        /* Verifica se este não é o último elemento */
+        if (i != N - 1) {
+
+            /* Adiciona o delimitador ao string e remove o espaço disponível de acordo */
+            strncat(dest, delim, size);
+            size -= strlen(delim);
+        }   
     }
 }

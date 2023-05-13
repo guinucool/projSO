@@ -323,18 +323,42 @@ void printStatusMessage(Message msg)
     printf("%d %s %ld ms\n", msg->pid, msg->msg, msg->time);
 }
 
+/**
+ * A função printStatsTimeMessage imprime uma mensagem para o stdout em formato de stats-time.
+ * 
+ * @param msg A mensagem a se imprimir.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
 void printStatsTimeMessage(Message msg)
 {
     /* Imprime o output que se pretende */
     printf("Total execution time is %ld ms\n", msg->time);
 }
 
+/**
+ * A função printStatsCmdMessage imprime uma mensagem para o stdout em formato de stats-command.
+ * 
+ * @param msg A mensagem a se imprimir.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
 void printStatsCmdMessage(Message msg)
 {
     /* Imprime o output que se pretende */
     printf("%s was executed %ld times\n", msg->msg, msg->time);
 }
 
+/**
+ * A função printStatsUniqMessage imprime uma mensagem para o stdout em formato de stats-uniq.
+ * 
+ * @param msg A mensagem a se imprimir.
+ * 
+ * @author Guilherme Oliveira
+ * @date 26/04/2023
+*/
 void printStatsUniqMessage(Message msg)
 {
     /* Imprime o output que se pretende */
