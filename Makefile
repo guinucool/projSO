@@ -42,4 +42,4 @@ $(OUTDIR)/%.o: $(SRCDIR)/$(TOOLSDIR)/%.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
-	rm -f obj/* tmp/* bin/{tracer,monitor}
+	rm -f obj/* tmp/* bin/tracer bin/monitor

@@ -10,3 +10,9 @@ bin/*
 obj/*
 tmp/*
 pids/*
+
+# Zips
+*.zip
+
+# PDF
+*.pdf
